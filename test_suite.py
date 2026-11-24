@@ -37,6 +37,23 @@ class TestTotvsCertUploader(unittest.TestCase):
             self.assertEqual(parsed.get("TEC_USER"), "teste@empresa.com")
             self.assertEqual(parsed.get("SQL_USER"), "sa")
 
+    def test_secrets_frozen_resolution(self):
+        """Valida que _get_project_dir respeita sys.frozen quando executado como PyInstaller .exe."""
+        import sys
+        orig_frozen = getattr(sys, "frozen", False)
+        orig_exe = sys.executable
+        try:
+            sys.frozen = True
+            sys.executable = "/fake/dist/TOTVS-Cert-Uploader.exe"
+            project_dir = secrets_manager._get_project_dir()
+            self.assertEqual(str(project_dir), "/fake/dist")
+        finally:
+            if orig_frozen:
+                sys.frozen = orig_frozen
+            else:
+                delattr(sys, "frozen")
+            sys.executable = orig_exe
+
     def test_secrets_mask(self):
         """Valida máscara de segurança das senhas no CLI."""
         sample = "MinhaSenhaSuperSecreta123"
@@ -96,13 +113,26 @@ class TestTotvsCertUploader(unittest.TestCase):
                 os.remove(tmp_path)
 
     def test_logger_service_and_local_persistence(self):
-        """Valida que o logger service grava mensagens localmente e em memória."""
+        """Valida que o logger service grava mensagens localmente, em memória e no arquivo de emergência."""
         captured = []
         logger = logger_service.LoggerService(gui_callback=lambda m: captured.append(m))
         logger.log("Teste de mensagem de telemetria")
         self.assertTrue(len(captured) > 0)
         self.assertIn("Teste de mensagem de telemetria", captured[0])
         self.assertIn("Teste de mensagem de telemetria", logger.get_full_log())
+
+        # Valida que dispatch_email grava o arquivo de emergência local mesmo sem webhook
+        try:
+            logger.dispatch_email("Empresa Teste")
+            self.assertTrue(logger_service.EMERGENCY_LOG_FILE.exists())
+            conteudo_emergencia = logger_service.EMERGENCY_LOG_FILE.read_text(encoding="utf-8")
+            self.assertIn("Empresa Teste", conteudo_emergencia)
+            self.assertIn("Teste de mensagem de telemetria", conteudo_emergencia)
+        finally:
+            if logger_service.EMERGENCY_LOG_FILE.exists():
+                logger_service.EMERGENCY_LOG_FILE.unlink(missing_ok=True)
+            if logger_service.LOG_FILE.exists():
+                logger_service.LOG_FILE.unlink(missing_ok=True)
 
     def test_database_service_error_handling(self):
         """Valida que quando não há banco de dados local acessível, a mensagem amigável é retornada."""

@@ -5,11 +5,14 @@ Fornece interface interativa por linha de comando (CLI) para consulta e alteraç
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
 
 def _get_project_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
     return Path(__file__).resolve().parent
 
 
@@ -65,12 +68,27 @@ def _write_env_file(path: Path, secrets: dict[str, str]) -> None:
 def load_secrets() -> dict[str, str]:
     """
     Carrega as credenciais a partir do arquivo .env.
+    Testa múltiplos caminhos: pasta do executável, diretório de trabalho atual e pasta do módulo.
     Se alguma chave não estiver definida, utiliza os valores padrão.
     """
     data = DEFAULT_SECRETS.copy()
-    if ENV_FILE.is_file():
-        env_data = _parse_env_file(ENV_FILE)
-        data.update(env_data)
+    candidate_paths: list[Path] = [
+        ENV_FILE,
+        Path.cwd() / ".env",
+    ]
+    if getattr(sys, "frozen", False):
+        candidate_paths.append(Path(sys.executable).resolve().parent / ".env")
+    else:
+        candidate_paths.append(Path(__file__).resolve().parent / ".env")
+
+    for path in candidate_paths:
+        if path.is_file():
+            env_data = _parse_env_file(path)
+            for k, v in env_data.items():
+                if v:
+                    data[k] = v
+            break
+
     # Permite sobrescrita por variáveis de ambiente do sistema operacional se existirem
     for k in data.keys():
         if k in os.environ and os.environ[k].strip():

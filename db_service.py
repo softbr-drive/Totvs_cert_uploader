@@ -68,11 +68,24 @@ class DatabaseService:
             except Exception:
                 self._conn = None
 
+        if not self.password:
+            secrets = load_secrets()
+            self.user = secrets.get("SQL_USER", self.user or "sa")
+            self.password = secrets.get("SQL_PASSWORD", "")
+
         candidate_instances = getattr(self, "candidate_instances", None) or [
             r"localhost\SQLEXPRESS",
+            r".\SQLEXPRESS",
             r"127.0.0.1\SQLEXPRESS",
+            r"(local)\SQLEXPRESS",
             r"(local)",
             r"localhost",
+            r".",
+            r"127.0.0.1",
+            r"localhost\CHEF",
+            r".\CHEF",
+            r"localhost\MISTERCHEF",
+            r".\MISTERCHEF",
         ]
         drivers = self._get_installed_odbc_drivers()
         if not drivers:
@@ -99,10 +112,27 @@ class DatabaseService:
             except Exception as exc:
                 last_error = str(exc)
 
+        # Tentativa de fallback com Autenticação Integrada do Windows (Trusted_Connection)
+        for server in candidate_instances[:5]:
+            conn_str = (
+                f"DRIVER={{{primary_driver}}};"
+                f"SERVER={server};"
+                f"DATABASE={self.database};"
+                f"Trusted_Connection=yes;"
+                f"TrustServerCertificate=yes;"
+                f"Connection Timeout=3;"
+            )
+            try:
+                conn = pyodbc.connect(conn_str, timeout=3)
+                self._conn = conn
+                return conn
+            except Exception as exc:
+                last_error = f"{last_error} | WinAuth: {exc}"
+
         # Se falhou com o driver primário e houver outros drivers instalados, faz uma tentativa com o genérico
         if len(drivers) > 1:
             for fallback_driver in drivers[1:2]:
-                for server in candidate_instances[:2]:
+                for server in candidate_instances[:3]:
                     conn_str = (
                         f"DRIVER={{{fallback_driver}}};"
                         f"SERVER={server};"

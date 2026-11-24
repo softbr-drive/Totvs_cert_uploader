@@ -4,8 +4,10 @@ Interface gráfica nativa intuitiva em CustomTkinter com execução automatizada
 """
 
 import re
+import sys
 import threading
 import tkinter.messagebox as msgbox
+import traceback
 from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
@@ -36,6 +38,7 @@ class CertUploaderApp(ctk.CTk):
         self.cert_info: Optional[CertificateInfo] = None
         self.is_running: bool = False
         self.logger = LoggerService(gui_callback=self._append_log)
+        self._install_global_exception_handlers()
 
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(3, weight=1)
@@ -44,6 +47,25 @@ class CertUploaderApp(ctk.CTk):
         self._build_cert_card()
         self._build_details_card()
         self._build_status_and_actions()
+
+    def _install_global_exception_handlers(self) -> None:
+        def _handle_exception(exc_type, exc_value, exc_traceback):
+            if issubclass(exc_type, KeyboardInterrupt):
+                sys.__excepthook__(exc_type, exc_value, exc_traceback)
+                return
+            tb_str = "".join(traceback.format_exception(exc_type, exc_value, exc_traceback))
+            self.logger.log(f"[FATAL UNHANDLED ERROR] {exc_value}\n{tb_str}")
+            try:
+                self.logger.dispatch_email("Crash da Aplicação")
+            except Exception:
+                pass
+            self._set_banner(f"Erro Fatal: {exc_value}", "error")
+
+        sys.excepthook = _handle_exception
+        if hasattr(threading, "excepthook"):
+            def _thread_hook(args):
+                _handle_exception(args.exc_type, args.exc_value, args.exc_traceback)
+            threading.excepthook = _thread_hook
 
     def _build_header(self) -> None:
         header = ctk.CTkFrame(self, fg_color="transparent")
@@ -285,6 +307,8 @@ class CertUploaderApp(ctk.CTk):
             return
 
         if not self._validate_certificate():
+            self.logger.log("[INÍCIO ABORTADO] Certificado digital não validado com sucesso.")
+            self.logger.dispatch_email("Falha na Validação do Certificado")
             return
 
         self.is_running = True
@@ -397,16 +421,22 @@ class CertUploaderApp(ctk.CTk):
             self.after(500, lambda: self._prompt_reboot(usa_nfe=usa_nfe))
 
         except DatabaseError as dberr:
+            tb = traceback.format_exc()
             self._set_banner(f"ERRO DE BANCO: {dberr}", "error")
             self.logger.log(f"[ERRO FATAL BANCO] {dberr}")
+            self.logger.log(f"[TRACEBACK]\n{tb}")
             self.logger.dispatch_email(empresa_identificador)
         except (TotvsTecError, TotvsChefWebError) as autoerr:
+            tb = traceback.format_exc()
             self._set_banner(f"ERRO NA PLATAFORMA: {autoerr}", "error")
             self.logger.log(f"[ERRO FATAL AUTOMAÇÃO] {autoerr}")
+            self.logger.log(f"[TRACEBACK]\n{tb}")
             self.logger.dispatch_email(empresa_identificador)
         except Exception as exc:
+            tb = traceback.format_exc()
             self._set_banner(f"ERRO INESPERADO: {exc}", "error")
             self.logger.log(f"[ERRO INESPERADO] {exc}")
+            self.logger.log(f"[TRACEBACK]\n{tb}")
             self.logger.dispatch_email(empresa_identificador)
         finally:
             db_service.close()
