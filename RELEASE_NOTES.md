@@ -31,6 +31,11 @@ Lançamento oficial da versão **v4.0.0** do **TOTVS Cert Uploader**, trazendo a
    * Utilitário CLI interativo para manutenção de credenciais mascaradas (`secrets_manager.py`).
    * Hook de pré-commit ativo impedindo vazamento acidental de chaves, senhas ou arquivos `.pfx`.
 
+8. **Resiliência de Telemetria e Logs de Emergência**:
+   * Suporte nativo ao executável Windows (`sys.frozen`) para leitura automática do `.env` na pasta do `.exe`.
+   * Gravação redundante do relatório completo em arquivo local de emergência (`LOG_ERRO_ATUALIZACAO.txt`).
+   * Captura técnica de traceback detalhado de banco e automação para diagnóstico ágil.
+
 ---
 
 ### 💻 Executável Incluso:

@@ -1,0 +1,28 @@
+name: Update Release Notes
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'RELEASE_NOTES.md'
+      - '.github/workflows/update-release-notes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-notes:
+    name: Atualizar Descrição da Release v4.0.0
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Atualizar Notas da Release v4.0.0 via GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release edit v4.0.0 --notes-file RELEASE_NOTES.md
+          echo "Notas da release v4.0.0 atualizadas com sucesso!"
