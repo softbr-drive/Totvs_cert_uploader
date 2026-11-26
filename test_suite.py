@@ -44,9 +44,11 @@ class TestTotvsCertUploader(unittest.TestCase):
         orig_exe = sys.executable
         try:
             sys.frozen = True
-            sys.executable = "/fake/dist/TOTVS-Cert-Uploader.exe"
+            fake_dir = Path(tempfile.gettempdir()) / "fake_dist"
+            fake_exe = fake_dir / "TOTVS-Cert-Uploader.exe"
+            sys.executable = str(fake_exe)
             project_dir = secrets_manager._get_project_dir()
-            self.assertEqual(str(project_dir), "/fake/dist")
+            self.assertEqual(project_dir, fake_dir.resolve())
         finally:
             if orig_frozen:
                 sys.frozen = orig_frozen
