@@ -28,5 +28,15 @@ config.json
 *.key
 *.pem
 
-# Logs
+# Logs e relatorios de execucao
 *.log
+LOG_*.txt
+falha_*.txt
+
+# Arquivos de sistema operacional e IDEs
+.DS_Store
+Thumbs.db
+.idea/
+.pytest_cache/
+.coverage
+htmlcov/

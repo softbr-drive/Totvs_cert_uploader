@@ -1,5 +1,11 @@
 # TOTVS Cert Uploader (NFe / NFCe)
 
+[![Release](https://img.shields.io/github/v/release/faustosoftbr/Totvs_cert_uploader?color=blue&label=Vers%C3%A3o%20Atual)](https://github.com/faustosoftbr/Totvs_cert_uploader/releases/latest)
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Platform](https://img.shields.io/badge/Plataforma-Windows%2010%20%7C%2011-0078D6?logo=windows&logoColor=white)](https://www.microsoft.com/windows)
+[![Tests](https://img.shields.io/badge/Testes-8%2F8%20Aprovados-success)](#execução-de-testes)
+[![License: MIT](https://img.shields.io/badge/Licen%C3%A7a-MIT-yellow.svg)](LICENSE)
+
 Aplicativo Desktop em Python (`CustomTkinter` + `Playwright` + `cryptography` + `pyodbc`) para leitura, validação local, atualização no banco SQL Server local (MISTERCHEFNET), envio aos portais TOTVS (Portal TEC e Chef Web Cloud), instalação no repositório de certificados do Windows e telemetria de logs via Webhook.
 
 ---
@@ -56,3 +62,27 @@ Para configurar em um novo ambiente:
    ```
 
 O comando exibirá o menu interativo para visualizar (mascarado ou sem máscara) e atualizar credenciais do Portal TEC, Chef Web Cloud, SQL Server e Webhook de Logs, persistindo diretamente no arquivo local `.env`.
+
+---
+
+## Execução de Testes
+
+O projeto possui uma bateria de testes automatizados com cobertura completa das regras críticas de negócio:
+
+```bash
+python test_suite.py
+```
+
+Itens validados pelos testes:
+1. Persistência e leitura segura de variáveis de ambiente (`.env`).
+2. Resolução correta de diretório em executáveis PyInstaller (`sys.frozen`).
+3. Leitura, decodificação PKCS#12 e formatação do Subject DN para o padrão Totvs Chef.
+4. Formatação e persistência de telemetria local e arquivo de emergência (`LOG_ERRO_ATUALIZACAO.txt`).
+5. Busca dinâmica de lojas por correspondência exata de CNPJ.
+6. Tratamento de exceção de banco de dados offline.
+
+---
+
+## Segurança e Vulnerabilidades
+
+Consulte a nossa [Política de Segurança](SECURITY.md) para orientações sobre como relatar vulnerabilidades ou contribuir com a integridade do projeto.
