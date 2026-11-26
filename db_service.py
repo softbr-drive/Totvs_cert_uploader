@@ -89,7 +89,10 @@ class DatabaseService:
         ]
         drivers = self._get_installed_odbc_drivers()
         if not drivers:
-            raise DatabaseError("Nenhum driver ODBC do SQL Server encontrado no Windows.")
+            raise DatabaseError(
+                "Detectei que o Totvs Chef não está instalado neste computador "
+                "ou nenhum driver ODBC do SQL Server foi encontrado no sistema operacional."
+            )
 
         # Utiliza o driver mais moderno disponível
         primary_driver = drivers[0]
