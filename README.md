@@ -47,22 +47,6 @@ Em vez de depender de um site remoto limitado, o cliente recebe um executável �
 
 ---
 
-## Manutenção de Senhas e Credenciais (Segurança)
-
-As credenciais do sistema ficam armazenadas localmente no arquivo `.env` (ignorado pelo `.gitignore`) e **nunca** são enviadas ao repositório GitHub.
-
-Para configurar em um novo ambiente:
-1. Copie o modelo `.env.example` para `.env`:
-   ```bash
-   copy .env.example .env
-   ```
-2. Para consultar ou alterar as senhas de forma interativa e mascarada:
-   ```bash
-   python secrets_manager.py
-   ```
-
-O comando exibirá o menu interativo para visualizar (mascarado ou sem máscara) e atualizar credenciais do Portal TEC, Chef Web Cloud, SQL Server e Webhook de Logs, persistindo diretamente no arquivo local `.env`.
-
 ---
 
 ## Execução de Testes
