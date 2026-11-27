@@ -33,6 +33,7 @@ O executável requer o Google Chrome ou o Microsoft Edge instalado no Windows pa
 | **`v1.2.0`** | Versão para cliente final com credenciais embutidas e upload exclusivo no Portal TEC. |
 | **`v1.3.0`** | Versão inicial do pipeline integrado com upload automático TEC, Chef Web e TPF. |
 | **`v1.4.0`** | **Pipeline Otimizado & Seleção Dinâmica por CNPJ**: <br>1. Validação local do PFX (CNPJ, Razão Social, Validade e Subject DN).<br>2. Instalação prévia do certificado no repositório do Windows (`Cert:\CurrentUser\My`) com chave privada exportável.<br>3. Localização dinâmica da Loja no SQL Server local por correspondência exata do CNPJ do certificado e atualização de `[NomeCertificado]`.<br>4. Upload no Portal TEC (Totvs Hospitalidade) utilizando o CNPJ da loja selecionada.<br>5. Upload no Chef Web Cloud (localizando a loja pelo Nome Fantasia da loja selecionada).<br>6. Lembrete com link direto no log para atualização manual na Plataforma Fiscal TPF (caso utilize módulo NFe).<br>7. Solicitação opcional de reinicialização do Windows.<br>8. Telemetria e envio de logs por e-mail via Google Apps Script Webhook. |
+| **`v1.4.1`** | Executável menor. A automação usa o Google Chrome ou o Microsoft Edge instalado no Windows. |
 
 ---
 

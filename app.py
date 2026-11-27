@@ -1,5 +1,5 @@
 """
-Aplicativo Desktop para Atualização de Certificado Digital - Softbr (v1.4.0).
+Aplicativo Desktop para Atualização de Certificado Digital - Softbr (v1.4.1).
 Interface gráfica nativa intuitiva em CustomTkinter com execução automatizada do pipeline em segundo plano.
 """
 
@@ -25,7 +25,7 @@ from totvs_tec import TotvsTecConfigurationError, TotvsTecError, TotvsTecUploade
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.4.1"
 
 
 class CertUploaderApp(ctk.CTk):
