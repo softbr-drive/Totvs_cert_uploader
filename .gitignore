@@ -1,5 +1,6 @@
 # Ambientes virtuais e cache Python
 .venv/
+.po-venv/
 venv/
 .vscode/
 __pycache__/

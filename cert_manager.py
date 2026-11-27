@@ -3,6 +3,7 @@ Módulo de gestão e processamento de certificados digitais (PKCS#12 / .pfx / .p
 Extração de dados fiscais (CNPJ, Razão Social, RFC4514 Subject DN) e instalação no Windows Store.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -190,33 +191,36 @@ def install_certificate_in_windows(file_path: str, password: str, store_location
     Por padrão instala em CurrentUser\\My (Pessoal) com a chave privada marcada como Exportável.
     Não requer privilégios de Administrador.
     """
-    abs_path = str(Path(file_path).resolve())
-    # Escapa aspas para PowerShell seguro
-    safe_path = abs_path.replace("'", "''")
-    safe_pwd = password.replace("'", "''")
-
+    dados = json.dumps({
+        "path": str(Path(file_path).resolve()),
+        "password": password,
+        "store": store_location,
+    })
     ps_script = (
-        f"$sec = ConvertTo-SecureString '{safe_pwd}' -AsPlainText -Force; "
-        f"$cert = Import-PfxCertificate -FilePath '{safe_path}' "
-        f"-CertStoreLocation '{store_location}' -Exportable -Password $sec; "
-        f"if ($cert) {{ Write-Output ('SUCESSO:' + $cert.Thumbprint) }} else {{ Write-Error 'Falha ao importar' }}"
+        "$ErrorActionPreference = 'Stop'; "
+        "$dados = [Console]::In.ReadToEnd() | ConvertFrom-Json; "
+        "$sec = ConvertTo-SecureString $dados.password -AsPlainText -Force; "
+        "$cert = Import-PfxCertificate -FilePath $dados.path "
+        "-CertStoreLocation $dados.store -Exportable -Password $sec; "
+        "if ($cert) { Write-Output ('SUCESSO:' + $cert.Thumbprint) } "
+        "else { Write-Error 'Falha ao importar' }"
     )
 
     try:
         proc = subprocess.run(
             ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+            input=dados,
             capture_output=True,
             text=True,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
             timeout=20,
         )
         output = proc.stdout.strip()
-        errors = proc.stderr.strip()
 
         if proc.returncode == 0 and "SUCESSO:" in output:
             thumbprint = output.split("SUCESSO:")[1].strip()
             return True, f"Certificado instalado com sucesso no Windows ({store_location}). Thumbprint: {thumbprint}"
         else:
-            return False, f"Falha na instalação do certificado no Windows: {errors or output}"
+            return False, "O Windows recusou a importação do certificado. Verifique o arquivo e as permissões."
     except Exception as exc:
-        return False, f"Erro ao executar instalação no Windows: {exc}"
+        return False, f"Erro ao executar instalação no Windows ({type(exc).__name__})."

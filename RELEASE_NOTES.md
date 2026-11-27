@@ -1,4 +1,14 @@
-# 🚀 TOTVS Cert Uploader - Versão 4.0.0
+# TOTVS Cert Uploader v1.4.0
+
+- O Portal TEC usa o CNPJ pontuado do certificado e continua quando o banco local falha.
+- O Chef Web Cloud continua após falha do TEC quando encontra uma única loja com o nome fantasia exato.
+- O resumo apresenta o resultado de cada destino e oferece a reinicialização ao final.
+- Na versão de testes, os navegadores ficam visíveis durante a automação.
+- O GitHub Actions compila o executável para Windows e disponibiliza o resultado como artefato.
+
+## Histórico
+
+### 🚀 TOTVS Cert Uploader - Versão 4.0.0
 
 Lançamento oficial da versão **v4.0.0** do **TOTVS Cert Uploader**, trazendo a nova arquitetura de pipeline otimizado, instalação prévia no repositório de certificados do Windows e localização dinâmica de lojas por correspondência exata de CNPJ no SQL Server local.
 

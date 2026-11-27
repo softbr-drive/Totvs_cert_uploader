@@ -5,8 +5,7 @@ Login administrativo com SOFTBR.05, localização da loja por Nome Fantasia,
 navegação para Cadastros > Loja > Aba Recepção NF-e, upload do PFX e salvamento.
 """
 
-import time
-from pathlib import Path
+import re
 from typing import Callable, Optional
 from playwright.sync_api import FrameLocator, Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
@@ -15,6 +14,10 @@ from secrets_manager import load_secrets
 
 
 class TotvsChefWebError(Exception):
+    pass
+
+
+class TotvsChefWebStoreUnavailable(TotvsChefWebError):
     pass
 
 
@@ -58,39 +61,19 @@ class TotvsChefWebUploader:
         domain_select = page.locator("#comboBoxDomain")
         if domain_select.is_visible(timeout=5000):
             self.log(f"Buscando ambiente da empresa correspondente a '{nome_loja}'...")
-            options = domain_select.locator("option").all()
-            target_val = None
-            target_label = None
-            nome_loja_clean = nome_loja.strip().upper()
-
-            # 1. Busca exata ou por início: "<Nome Loja> - <Cod Loja>"
-            for opt in options:
-                opt_text = opt.inner_text().strip().upper()
-                if not opt_text:
-                    continue
-                if opt_text.startswith(nome_loja_clean) or nome_loja_clean in opt_text:
-                    target_val = opt.get_attribute("value")
-                    target_label = opt.inner_text().strip()
-                    break
-
-            # 2. Busca parcial por palavras-chave se não encontrou o nome completo
-            if not target_val:
-                palavras = [p for p in nome_loja_clean.split() if len(p) >= 4]
-                if palavras:
-                    for opt in options:
-                        opt_text = opt.inner_text().strip().upper()
-                        if all(p in opt_text for p in palavras):
-                            target_val = opt.get_attribute("value")
-                            target_label = opt.inner_text().strip()
-                            break
-
-            if not target_val:
-                raise TotvsChefWebError(
-                    f"Ambiente da empresa correspondente a '{nome_loja}' não foi localizado na lista de domínios do Chef Web Cloud."
+            nome_exato = re.escape(nome_loja.strip())
+            rotulo_ambiente = re.compile(rf"{nome_exato}(?:\s+-\s+[0-9]+)?", re.IGNORECASE)
+            opcoes = [
+                opt for opt in domain_select.locator("option").all()
+                if rotulo_ambiente.fullmatch(opt.inner_text().strip())
+            ]
+            if len(opcoes) != 1 or not (target_val := opcoes[0].get_attribute("value")):
+                raise TotvsChefWebStoreUnavailable(
+                    f"Não foi possível identificar um único ambiente para '{nome_loja}'."
                 )
 
-            self.log(f"Ambiente da empresa localizado: '{target_label}'")
-            page.select_option("#comboBoxDomain", value=target_val)
+            self.log(f"Ambiente da empresa localizado: '{opcoes[0].inner_text().strip()}'")
+            domain_select.select_option(value=target_val)
             page.wait_for_timeout(800)
 
         # Clica em Entrar no domínio
@@ -112,16 +95,16 @@ class TotvsChefWebUploader:
         page.goto(loja_url, wait_until="domcontentloaded", timeout=self.timeout_ms)
         page.wait_for_timeout(3000)
 
-        # Seleciona a linha correspondente à loja (caso haja mais de uma)
-        row = page.locator(f"tr:has-text('{nome_loja}')").first
-        if row.count() > 0 and row.is_visible(timeout=3000):
-            self.log(f"Linha da loja '{nome_loja}' selecionada na tabela.")
-            row.click()
-        else:
-            # Fallback para a primeira linha de dados da grid
-            first_row = page.locator("table tbody tr, tr.dxgvDataRow_MetropolisBlue").first
-            if first_row.is_visible(timeout=2000):
-                first_row.click()
+        nome_exato = re.compile(rf"^\s*{re.escape(nome_loja.strip())}\s*$", re.IGNORECASE)
+        rows = page.locator("tr:visible").filter(
+            has=page.locator("td:visible").filter(has_text=nome_exato)
+        )
+        if rows.count() != 1:
+            raise TotvsChefWebStoreUnavailable(
+                f"Não foi encontrada uma única loja com o nome fantasia exato '{nome_loja}'."
+            )
+        self.log(f"Linha da loja '{nome_loja}' selecionada na tabela.")
+        rows.click()
         page.wait_for_timeout(1000)
 
         # Clica no botão 'Editar' na barra de ferramentas
@@ -161,7 +144,7 @@ class TotvsChefWebUploader:
         btn_cert.click()
         page.wait_for_timeout(3000)
 
-        self.log(f"Anexando certificado '{Path(cert_path).name}' e informando senha no iframe UploadCertificado...")
+        self.log("Anexando o certificado e preenchendo o formulário de upload...")
         # O formulário do certificado fica dentro do iframe UploadCertificado
         frame = page.frame_locator("iframe[src*='UploadCertificado']")
         
@@ -188,7 +171,7 @@ class TotvsChefWebUploader:
             page.evaluate("runInSession('saveItem()')")
 
         page.wait_for_timeout(3000)
-        return "Certificado atualizado com sucesso no Chef Web Cloud!"
+        return "Comando de salvamento enviado ao Chef Web Cloud."
 
     def run(self, nome_loja: str, cert_path: str, cert_password: str) -> str:
         with sync_playwright() as p:
@@ -197,7 +180,7 @@ class TotvsChefWebUploader:
                 self._login(page, nome_loja=nome_loja)
                 self._select_store_and_edit(page, nome_loja)
                 res = self._upload_certificate_refeicao_nfe(page, cert_path, cert_password)
-                self.log("Atualização no Chef Web concluída com sucesso!")
+                self.log(res)
                 return res
             finally:
                 try:

@@ -99,17 +99,16 @@ class LoggerService:
                             self.log("[TELEMETRIA] Log enviado com sucesso por e-mail via Webhook!")
                             return True
                         else:
-                            msg = res_data.get("message", resp.text[:200])
-                            self.log(f"[TELEMETRIA] Webhook retornou erro: {msg}")
+                            self.log("[TELEMETRIA] Webhook informou que o envio falhou.")
                     except Exception:
                         if "doPost" in resp.text:
                             self.log("[TELEMETRIA] Erro no Google Apps Script: Função doPost não foi encontrada na implantação.")
                         else:
-                            self.log(f"[TELEMETRIA] Webhook retornou resposta inesperada (não-JSON): {resp.text[:120]}")
+                            self.log("[TELEMETRIA] Webhook retornou resposta inesperada (não-JSON).")
                 else:
-                    self.log(f"[TELEMETRIA] Servidor de logs retornou status {resp.status_code}: {resp.text[:150]}")
+                    self.log(f"[TELEMETRIA] Servidor de logs retornou status {resp.status_code}.")
             except Exception as exc:
-                self.log(f"[TELEMETRIA] Aviso na tentativa {tentativa}: {exc}")
+                self.log(f"[TELEMETRIA] Falha na tentativa {tentativa} ({type(exc).__name__}).")
 
             if tentativa < 2:
                 time.sleep(2)

@@ -4,16 +4,21 @@ URL: https://tec.totvshospitalidade.com/auth/login
 Efetua login com credenciais de parceiro, localiza o tenant pelo CNPJ e anexa o certificado.
 """
 
+import re
 import time
 from pathlib import Path
 from typing import Callable, Optional
 from playwright.sync_api import FrameLocator, Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 from playwright_helper import launch_incognito_browser
-from secrets_manager import load_secrets
+from secrets_manager import ENV_FILE, load_secrets
 
 
 class TotvsTecError(Exception):
+    pass
+
+
+class TotvsTecConfigurationError(TotvsTecError):
     pass
 
 
@@ -68,8 +73,8 @@ class TotvsTecUploader:
             return
 
         self.log("Autenticando credenciais do parceiro...")
-        user_input = auth_frame.locator("input[type='text'], input[type='email']").first
-        pwd_input = auth_frame.locator("input[type='password']").first
+        user_input = auth_frame.locator("input[type='text']:visible, input[type='email']:visible").first
+        pwd_input = auth_frame.locator("input[type='password']:visible").first
 
         try:
             user_input.wait_for(state="visible", timeout=self.timeout_ms)
@@ -81,7 +86,15 @@ class TotvsTecUploader:
         pwd_input.fill(self.password)
 
         entrar_btn = auth_frame.get_by_role("button", name="Entrar", exact=True)
-        entrar_btn.click()
+        try:
+            entrar_btn.click(timeout=self.timeout_ms)
+        except PlaywrightTimeoutError as exc:
+            if entrar_btn.count() == 1 and not entrar_btn.is_enabled(timeout=1000):
+                raise TotvsTecError(
+                    "O botão Entrar permaneceu desabilitado após o preenchimento. "
+                    "Verifique os campos e as mensagens exibidas na tela de login."
+                ) from exc
+            raise TotvsTecError("A tela de login do Portal TEC não aceitou o clique em Entrar.") from exc
 
         deadline = time.time() + (self.timeout_ms / 1000.0)
         while time.time() < deadline:
@@ -108,11 +121,11 @@ class TotvsTecUploader:
         page.wait_for_timeout(2000)
         self._dismiss_popups(page)
 
-        acessar_btns = auth_frame.locator("button:has-text('Acessar')")
-        if acessar_btns.count() == 0:
-            raise TotvsTecError(f"Empresa com CNPJ {cnpj_formatado} não localizada no Portal TEC.")
+        acessar_btns = auth_frame.locator("button:visible").filter(has_text=re.compile(r"^\s*Acessar\s*$"))
+        if acessar_btns.count() != 1:
+            raise TotvsTecError(f"Não foi encontrado um único resultado para o CNPJ {cnpj_formatado} no Portal TEC.")
 
-        acessar_btns.first.click()
+        acessar_btns.click()
         page.wait_for_selector(".po-menu-item", timeout=self.timeout_ms)
 
     def _navigate_to_upload(self, page: Page) -> None:
@@ -168,17 +181,26 @@ class TotvsTecUploader:
                 if el.is_visible(timeout=200):
                     txt = (el.inner_text() or "").strip()
                     if txt:
+                        if any(w in txt.lower() for w in ("erro", "inválid", "incorret", "expirad", "divergente", "não foi", "não salvo")):
+                            raise TotvsTecError(f"Aviso do Portal TEC: {txt}")
                         if any(w in txt.lower() for w in ("sucesso", "salvo", "atualizado", "enviado")):
                             return txt
-                        if any(w in txt.lower() for w in ("erro", "inválid", "incorret", "expirad", "divergente")):
-                            raise TotvsTecError(f"Aviso do Portal TEC: {txt}")
             if "/general/company" in page.url and "/certificate" not in page.url:
                 return "Certificado salvo com sucesso no Portal TEC!"
             page.wait_for_timeout(400)
 
-        return "Certificado enviado no Portal TEC."
+        raise TotvsTecError("O Portal TEC não confirmou o salvamento do certificado.")
 
     def run(self, cnpj_formatado: str, cert_path: str, cert_password: str) -> str:
+        faltantes = [
+            chave for chave, valor in (("TEC_USER", self.username), ("TEC_PASSWORD", self.password))
+            if not valor.strip()
+        ]
+        if faltantes:
+            raise TotvsTecConfigurationError(
+                f"Credenciais do Portal TEC ausentes ({', '.join(faltantes)}). Configure em {ENV_FILE}."
+            )
+
         with sync_playwright() as p:
             browser, context, page = launch_incognito_browser(p, headless=self.headless)
             try:

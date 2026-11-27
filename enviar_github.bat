@@ -13,7 +13,7 @@ if %errorlevel% == 0 (
     echo.
     echo [ALERTA CRÍTICO DE SEGURANÇA]
     echo Arquivos com dados sensíveis (.env, _secrets.py ou certificados) estao rastreados no Git!
-    echo O envio foi CANCELADO para proteger sua conta do GitHub contra suspensão.
+    echo O envio foi cancelado porque há arquivos sensíveis rastreados.
     echo.
     echo Execute 'git status' e remova os arquivos do rastreamento antes de tentar novamente.
     echo ======================================================================

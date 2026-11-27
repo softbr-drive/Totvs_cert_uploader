@@ -1,0 +1,5 @@
+#!/bin/sh
+if command -v python3 >/dev/null 2>&1 && python3 --version >/dev/null 2>&1; then
+    exec python3 verificar_segredos_git.py
+fi
+exec python verificar_segredos_git.py
