@@ -23,6 +23,8 @@ Em vez de depender de um site remoto limitado, o cliente recebe um executável �
 
 ---
 
+O executável requer o Google Chrome ou o Microsoft Edge instalado no Windows para automatizar os portais.
+
 ## Versões Disponíveis
 
 | Versão | Descrição |

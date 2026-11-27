@@ -17,6 +17,7 @@ import customtkinter as ctk
 from cert_manager import CertificateInfo, format_cnpj, format_subject_dn_totvs_order, install_certificate_in_windows, read_pfx_certificate
 from db_service import DatabaseError, DatabaseService
 from logger_service import LoggerService
+from playwright_helper import BrowserUnavailableError
 from reboot_service import reiniciar_computador_windows
 from totvs_chef_web import TotvsChefWebStoreUnavailable, TotvsChefWebUploader
 from totvs_tec import TotvsTecConfigurationError, TotvsTecError, TotvsTecUploader
@@ -376,7 +377,7 @@ class CertUploaderApp(ctk.CTk):
                     registrar("Portal TEC", "Atualizado", detalhe)
                 except TotvsTecConfigurationError as exc:
                     registrar("Portal TEC", "Pendente", str(exc))
-                except TotvsTecError as exc:
+                except (TotvsTecError, BrowserUnavailableError) as exc:
                     registrar("Portal TEC", "Falha", str(exc))
                 except Exception:
                     registrar("Portal TEC", "Falha", traceback.format_exc())
@@ -393,6 +394,8 @@ class CertUploaderApp(ctk.CTk):
                     registrar("Chef Web Cloud", "Envio sem confirmação", detalhe)
                 except TotvsChefWebStoreUnavailable as exc:
                     registrar("Chef Web Cloud", "Pendente", str(exc))
+                except BrowserUnavailableError as exc:
+                    registrar("Chef Web Cloud", "Falha", str(exc))
                 except Exception:
                     registrar("Chef Web Cloud", "Falha", traceback.format_exc())
             else:

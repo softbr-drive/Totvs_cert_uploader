@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
-from playwright.sync_api import Browser, BrowserContext, Page, Playwright
+from playwright.sync_api import Browser, BrowserContext, Error as PlaywrightError, Page, Playwright
 
 # Evita que o driver node.exe pisque janelas de console no Windows
 if sys.platform == "win32":
@@ -31,6 +31,10 @@ DEFAULT_USER_AGENT = (
 )
 
 
+class BrowserUnavailableError(RuntimeError):
+    pass
+
+
 def launch_incognito_browser(p: Playwright, headless: bool = True) -> tuple[Browser, BrowserContext, Page]:
     """Cria uma instância anônima e limpa do Chromium (Chrome ou Edge)."""
     launch_args = [
@@ -45,11 +49,14 @@ def launch_incognito_browser(p: Playwright, headless: bool = True) -> tuple[Brow
         try:
             browser = p.chromium.launch(channel=channel, headless=headless, args=launch_args)
             break
-        except Exception:
+        except PlaywrightError:
             continue
 
     if browser is None:
-        browser = p.chromium.launch(headless=headless, args=launch_args)
+        raise BrowserUnavailableError(
+            "Não foi possível abrir o Google Chrome ou o Microsoft Edge. "
+            "Verifique se pelo menos um deles está instalado e pode ser aberto neste computador."
+        )
 
     context = browser.new_context(
         user_agent=DEFAULT_USER_AGENT,

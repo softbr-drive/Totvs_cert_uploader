@@ -16,8 +16,6 @@ jobs:
     name: Compilar Executável Windows (PyInstaller)
     runs-on: windows-latest
     timeout-minutes: 20
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: "0"
 
     steps:
       - name: Checkout do Repositório
@@ -38,10 +36,6 @@ jobs:
 
       - name: Executar testes
         run: python test_suite.py
-
-      - name: Instalar Navegadores do Playwright
-        run: |
-          playwright install chromium
 
       - name: Compilar Executável com PyInstaller
         run: |

@@ -1,4 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_all
 
 datas = []
@@ -8,8 +10,10 @@ hiddenimports = ['secrets_manager', 'pyodbc', 'requests', 'cryptography', 'cert_
 tmp_ret = collect_all('customtkinter')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-tmp_ret = collect_all('playwright')
-datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+playwright_data, playwright_binaries, playwright_imports = collect_all('playwright')
+datas += [entry for entry in playwright_data if '.local-browsers' not in Path(entry[0]).parts]
+binaries += [entry for entry in playwright_binaries if '.local-browsers' not in Path(entry[0]).parts]
+hiddenimports += playwright_imports
 
 a = Analysis(
     ['app.py'],
