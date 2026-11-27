@@ -6,6 +6,7 @@ Fornece interface interativa por linha de comando (CLI) para consulta e alteraç
 
 import os
 import sys
+from getpass import getpass
 from pathlib import Path
 from typing import Optional
 
@@ -164,7 +165,8 @@ def interactive_cli() -> None:
             current_val = current.get(selected_key, "")
             print(f"\nAlterando: {label}")
             print(f"Valor atual: {mask_secret(current_val)}")
-            new_val = input("Digite o novo valor (ou ENTER para manter o atual): ").strip()
+            ler_valor = getpass if "PASSWORD" in selected_key else input
+            new_val = ler_valor("Digite o novo valor (ou ENTER para manter o atual): ").strip()
             if new_val:
                 current[selected_key] = new_val
                 print(f"-> {label} atualizado!")

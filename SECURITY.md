@@ -6,8 +6,8 @@ Atualmente, apenas a versão principal mais recente recebe atualizações de seg
 
 | Versão | Suportada          |
 | :-----: | :----------------: |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+| 1.4.x   | :white_check_mark: |
+| Versões anteriores | :x:                |
 
 ---
 
@@ -23,4 +23,6 @@ Se você descobrir uma vulnerabilidade de segurança, siga as diretrizes abaixo:
 
 ### Diretrizes de Segurança do Repositório:
 - O arquivo `.env` e quaisquer certificados digitais (`.pfx`, `.p12`, `.key`, `.cer`, `.pem`) **nunca** devem ser commitados no repositório.
-- O hook de segurança pré-commit está disponível via [`instalar_hook_seguranca.bat`](instalar_hook_seguranca.bat) para bloquear automaticamente o envio de arquivos sensíveis ou credenciais ao GitHub.
+- O hook de segurança pré-commit está disponível via [`instalar_hook_seguranca.bat`](instalar_hook_seguranca.bat) para verificar arquivos preparados para commit e valores configurados no ambiente local. O hook é instalado por cópia ou pode ser usado com o diretório .githooks.
+
+- Revogue ou troque imediatamente credenciais que tenham sido versionadas. Remover o valor do código atual preserva as cópias no histórico; coordene com os administradores qualquer limpeza de commits já publicados.

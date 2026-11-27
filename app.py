@@ -1,5 +1,5 @@
 """
-Aplicativo Desktop para Atualização de Certificado Digital - Softbr (v4.0.0).
+Aplicativo Desktop para Atualização de Certificado Digital - Softbr (v1.4.0).
 Interface gráfica nativa intuitiva em CustomTkinter com execução automatizada do pipeline em segundo plano.
 """
 
@@ -9,7 +9,6 @@ import threading
 import tkinter.messagebox as msgbox
 import traceback
 from datetime import datetime
-from pathlib import Path
 from tkinter import filedialog
 from typing import Optional
 
@@ -19,13 +18,13 @@ from cert_manager import CertificateInfo, format_cnpj, format_subject_dn_totvs_o
 from db_service import DatabaseError, DatabaseService
 from logger_service import LoggerService
 from reboot_service import reiniciar_computador_windows
-from totvs_chef_web import TotvsChefWebError, TotvsChefWebUploader
-from totvs_tec import TotvsTecError, TotvsTecUploader
+from totvs_chef_web import TotvsChefWebStoreUnavailable, TotvsChefWebUploader
+from totvs_tec import TotvsTecConfigurationError, TotvsTecError, TotvsTecUploader
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-APP_VERSION = "4.0.0"
+APP_VERSION = "1.4.0"
 
 
 class CertUploaderApp(ctk.CTk):
@@ -249,7 +248,7 @@ class CertUploaderApp(ctk.CTk):
         if file_path:
             self.file_entry.delete(0, "end")
             self.file_entry.insert(0, file_path)
-            self.logger.log(f"Arquivo selecionado: {Path(file_path).name}")
+            self.logger.log("Arquivo de certificado selecionado.")
             self._auto_validate_if_ready()
 
     def _auto_validate_if_ready(self) -> None:
@@ -326,139 +325,103 @@ class CertUploaderApp(ctk.CTk):
 
         cert_path = cert.file_path
         cert_pwd = self.cert_pwd_entry.get()
-        empresa_identificador = cert.cnpj_formatado or cert.razao_social
-        usa_nfe = False
+        cnpj = format_cnpj(cert.cnpj_numeros or cert.cnpj_formatado)
+        empresa_identificador = cnpj or cert.razao_social
+        loja = None
+        usa_nfe = None
+        resultados = {}
 
-        db_service = DatabaseService()
+        def registrar(destino: str, estado: str, detalhe: str) -> None:
+            resultados[destino] = estado
+            self.logger.log(f"[{destino}] {estado}. {detalhe}")
+
         try:
-            # -------------------------------------------------------------
-            # PASSO 2: Instalar Certificado Digital no Windows
-            # -------------------------------------------------------------
-            self._set_banner("Passo 2/5: Instalando certificado no repositório do Windows...", "working")
-            self.logger.log("[PASSO 2] Instalando certificado no Windows (CurrentUser\\My) com chave exportável...")
-            ok_win, win_msg = install_certificate_in_windows(cert_path, cert_pwd)
-            self.logger.log(f"[PASSO 2] {win_msg}")
-            if not ok_win:
-                self.logger.log("[PASSO 2] Aviso: Não foi possível registrar no Windows Store, mas prosseguindo.")
+            self._set_banner("Passo 2/5: Instalando certificado no Windows...", "working")
+            try:
+                ok, detalhe = install_certificate_in_windows(cert_path, cert_pwd)
+                registrar("Windows", "Atualizado" if ok else "Falha", detalhe)
+            except Exception:
+                registrar("Windows", "Falha", traceback.format_exc())
             self._set_progress(0.20)
 
-            # -------------------------------------------------------------
-            # PASSO 3: Localizar Loja pelo CNPJ do Certificado e Atualizar SQL Server
-            # -------------------------------------------------------------
-            self._set_banner("Passo 3/5: Localizando loja pelo CNPJ no SQL Server...", "working")
-            self.logger.log("[PASSO 3] Conectando ao banco de dados MISTERCHEFNET...")
-
-            cnpj_cert = cert.cnpj_numeros or re.sub(r"\D", "", cert.cnpj_formatado or "")
-            if not cnpj_cert:
-                raise DatabaseError("Não foi possível identificar o CNPJ do certificado digital para localizar a loja no banco.")
-
-            self.logger.log(f"[PASSO 3] Comparando CNPJ do certificado ({cert.cnpj_formatado or cnpj_cert}) com as lojas do banco...")
-            loja = db_service.buscar_loja_por_cnpj(cnpj_cert)
-            empresa_identificador = f"{loja.nome_loja} ({loja.cnpj})"
-            self.logger.log(
-                f"[PASSO 3] Loja correspondente selecionada: Código {loja.codigo_loja} | "
-                f"Nome Fantasia: '{loja.nome_loja}' | CNPJ: '{loja.cnpj}' | Razão Social: '{loja.razao_social}'"
-            )
-
-            # Verifica se utiliza módulo NFe
-            usa_nfe = db_service.verificar_licenca_nfe()
-            self.logger.log(f"[PASSO 3] Verificação de módulo NFe (últimos 60 dias): {'SIM (Ativo)' if usa_nfe else 'NÃO (Apenas NFCe)'}")
-
-            # Atualiza o campo [NomeCertificado] com o Subject DN na ordem canônica do Totvs Chef para a loja correspondente
-            subject_formatado = format_subject_dn_totvs_order(cert.subject_dn)
-            self.logger.log(f"[PASSO 3] Atualizando [NomeCertificado] da Loja {loja.codigo_loja} ('{loja.nome_loja}') para: {subject_formatado}")
-            db_service.atualizar_certificado_loja(loja.codigo_loja, subject_formatado)
-            self.logger.log(f"[PASSO 3] Banco de dados SQL Server atualizado com sucesso para a Loja {loja.codigo_loja}!")
+            self._set_banner("Passo 3/5: Atualizando o banco local...", "working")
+            db_service = None
+            try:
+                db_service = DatabaseService()
+                loja = db_service.buscar_loja_por_cnpj(cnpj)
+                empresa_identificador = f"{loja.nome_loja} ({loja.cnpj})"
+                subject_dn = format_subject_dn_totvs_order(cert.subject_dn)
+                db_service.atualizar_certificado_loja(loja.codigo_loja, subject_dn)
+                registrar("Banco local", "Atualizado", empresa_identificador)
+            except DatabaseError as exc:
+                registrar("Banco local", "Falha", str(exc))
+            except Exception:
+                registrar("Banco local", "Falha", traceback.format_exc())
+            finally:
+                if db_service is not None:
+                    try:
+                        if loja is not None:
+                            usa_nfe = db_service.verificar_licenca_nfe()
+                    except Exception:
+                        self.logger.log(f"[TPF] Falha ao verificar atividade de NF-e. {traceback.format_exc()}")
+                    finally:
+                        db_service.close()
             self._set_progress(0.40)
 
-            # -------------------------------------------------------------
-            # PASSO 4: Atualizar Portal TEC (Totvs Hospitalidade)
-            # -------------------------------------------------------------
-            self._set_banner("Passo 4/5: Enviando certificado para o Portal TEC...", "working")
-            self.logger.log("[PASSO 4] Iniciando automação no Portal TEC...")
-            tec_uploader = TotvsTecUploader(log_callback=self.logger.log, headless=False)
-            target_cnpj = loja.cnpj or cert.cnpj_formatado or format_cnpj(cert.cnpj_numeros)
-            self.logger.log(f"[PASSO 4] Buscando empresa no Portal TEC pelo CNPJ da loja selecionada ('{loja.nome_loja}'): {target_cnpj}")
-            tec_res = tec_uploader.run(cnpj_formatado=format_cnpj(target_cnpj), cert_path=cert_path, cert_password=cert_pwd)
-            self.logger.log(f"[PASSO 4] Resultado Portal TEC: {tec_res}")
+            self._set_banner("Passo 4/5: Enviando certificado ao Portal TEC...", "working")
+            if re.fullmatch(r"[0-9]{2}\.[0-9]{3}\.[0-9]{3}/[0-9]{4}-[0-9]{2}", cnpj):
+                try:
+                    tec = TotvsTecUploader(log_callback=self.logger.log, headless=False)
+                    detalhe = tec.run(cnpj_formatado=cnpj, cert_path=cert_path, cert_password=cert_pwd)
+                    registrar("Portal TEC", "Atualizado", detalhe)
+                except TotvsTecConfigurationError as exc:
+                    registrar("Portal TEC", "Pendente", str(exc))
+                except TotvsTecError as exc:
+                    registrar("Portal TEC", "Falha", str(exc))
+                except Exception:
+                    registrar("Portal TEC", "Falha", traceback.format_exc())
+            else:
+                registrar("Portal TEC", "Pendente", "CNPJ do certificado indisponível ou inválido.")
             self._set_progress(0.65)
 
-            # -------------------------------------------------------------
-            # PASSO 5: Atualizar Chef Web Cloud
-            # -------------------------------------------------------------
-            self._set_banner("Passo 5/5: Atualizando certificado no Chef Web Cloud...", "working")
-            self.logger.log(f"[PASSO 5] Iniciando automação no Chef Web Cloud para a loja '{loja.nome_loja}' (Nome Fantasia)...")
-            chef_uploader = TotvsChefWebUploader(log_callback=self.logger.log, headless=False)
-            chef_res = chef_uploader.run(nome_loja=loja.nome_loja, cert_path=cert_path, cert_password=cert_pwd)
-            self.logger.log(f"[PASSO 5] Resultado Chef Web: {chef_res}")
-            self._set_progress(0.85)
-
-            # -------------------------------------------------------------
-            # Finalização com Sucesso e Lembrete TPF
-            # -------------------------------------------------------------
-            self._set_banner("SUCESSO: Certificado digital atualizado nas plataformas!", "success")
-            self.logger.log("=" * 60)
-            self.logger.log("PROCESSO DE ATUALIZAÇÃO CONCLUÍDO COM ÊXITO!")
-            self.logger.log("=" * 60)
-            if usa_nfe:
-                self.logger.log("[LEMBRETE OBRIGATÓRIO - NF-e / PLATAFORMA FISCAL TPF]")
-                self.logger.log("Identificada emissão ativa de NF-e nesta loja nos últimos 60 dias.")
-                self.logger.log("ATENÇÃO: O certificado digital deve ser atualizado MANUALMENTE")
-                self.logger.log("na Plataforma Fiscal TOTVS (TPF) pelo portal:")
-                self.logger.log("   URL: https://plataformafiscal.totvs.com.br/estabelecimento")
+            self._set_banner("Passo 5/5: Verificando loja no Chef Web Cloud...", "working")
+            nome_loja = (loja.nome_loja or "").strip() if loja is not None else ""
+            if nome_loja:
+                try:
+                    chef = TotvsChefWebUploader(log_callback=self.logger.log, headless=False)
+                    detalhe = chef.run(nome_loja=nome_loja, cert_path=cert_path, cert_password=cert_pwd)
+                    registrar("Chef Web Cloud", "Envio sem confirmação", detalhe)
+                except TotvsChefWebStoreUnavailable as exc:
+                    registrar("Chef Web Cloud", "Pendente", str(exc))
+                except Exception:
+                    registrar("Chef Web Cloud", "Falha", traceback.format_exc())
             else:
-                self.logger.log("[LEMBRETE FISCAL - PLATAFORMA FISCAL TPF]")
-                self.logger.log("Caso esta loja utilize NF-e em outros módulos ou contingência,")
-                self.logger.log("lembre-se de atualizar o certificado manualmente pelo portal:")
-                self.logger.log("   URL: https://plataformafiscal.totvs.com.br/estabelecimento")
-            self.logger.log("=" * 60)
+                registrar("Chef Web Cloud", "Pendente", "Nome fantasia indisponível no banco local.")
+
+            if usa_nfe:
+                aviso_tpf = "Atividade recente de NF-e detectada. Atualize o certificado manualmente na TPF."
+            else:
+                aviso_tpf = "Se a loja utiliza NF-e, verifique a atualização manual do certificado na TPF."
+            aviso_tpf += "\nhttps://plataformafiscal.totvs.com.br/estabelecimento"
+            self.logger.log(f"[TPF] {aviso_tpf}")
+
+            resumo = "\n".join(f"{destino} · {estado}" for destino, estado in resultados.items())
+            self._set_banner("Execução finalizada. Confira o resultado de cada etapa.", "info")
             self._set_progress(1.0)
-
-            # Envia telemetria por e-mail via Webhook (contendo o lembrete no log)
-            self.logger.dispatch_email(loja.nome_loja)
-
-            # Diálogo de reinicialização do Windows
-            self.after(500, lambda: self._prompt_reboot(usa_nfe=usa_nfe))
-
-        except DatabaseError as dberr:
-            tb = traceback.format_exc()
-            self._set_banner(f"ERRO DE BANCO: {dberr}", "error")
-            self.logger.log(f"[ERRO FATAL BANCO] {dberr}")
-            self.logger.log(f"[TRACEBACK]\n{tb}")
-            self.logger.dispatch_email(empresa_identificador)
-        except (TotvsTecError, TotvsChefWebError) as autoerr:
-            tb = traceback.format_exc()
-            self._set_banner(f"ERRO NA PLATAFORMA: {autoerr}", "error")
-            self.logger.log(f"[ERRO FATAL AUTOMAÇÃO] {autoerr}")
-            self.logger.log(f"[TRACEBACK]\n{tb}")
-            self.logger.dispatch_email(empresa_identificador)
-        except Exception as exc:
-            tb = traceback.format_exc()
-            self._set_banner(f"ERRO INESPERADO: {exc}", "error")
-            self.logger.log(f"[ERRO INESPERADO] {exc}")
-            self.logger.log(f"[TRACEBACK]\n{tb}")
-            self.logger.dispatch_email(empresa_identificador)
+            try:
+                self.logger.dispatch_email(empresa_identificador)
+            except Exception:
+                self.logger.log(f"[LOGS] Falha no envio do relatório. {traceback.format_exc()}")
+            self.after(500, lambda: self._prompt_reboot(resumo, aviso_tpf))
         finally:
-            db_service.close()
             self.is_running = False
             self.after(0, lambda: self.start_btn.configure(state="normal", text="INICIAR ATUALIZAÇÃO DO CERTIFICADO"))
 
-    def _prompt_reboot(self, usa_nfe: bool = False) -> None:
-        """Diálogo perguntando se o cliente deseja reiniciar o computador agora."""
-        aviso_tpf = (
-            "\n\n[LEMBRETE IMPORTANTE]:\nComo esta loja possui emissão de NF-e, "
-            "lembre-se de atualizar o certificado MANUALMENTE na Plataforma Fiscal TOTVS:\n"
-            "https://plataformafiscal.totvs.com.br/estabelecimento"
-            if usa_nfe
-            else ""
-        )
+    def _prompt_reboot(self, resumo: str, aviso_tpf: str) -> None:
+        """Exibe o resultado e pergunta se o operador deseja reiniciar o computador."""
         resposta = msgbox.askyesno(
-            "Reiniciar Computador",
-            "A atualização do certificado digital foi concluída com sucesso!\n\n"
-            "Para que todas as alterações tenham efeito no sistema fiscal, "
-            "é recomendável reiniciar o computador."
-            f"{aviso_tpf}\n\n"
-            "Deseja reiniciar o computador agora?",
+            "Resultado da atualização",
+            f"{resumo}\n\n{aviso_tpf}\n\nDeseja reiniciar o computador agora?",
         )
         if resposta:
             self.logger.log("[REINICIALIZAÇÃO] Reinicialização autorizada pelo cliente. Reiniciando Windows em 5 segundos...")

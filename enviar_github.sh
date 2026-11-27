@@ -14,7 +14,7 @@ if [ -n "$FORBIDDEN" ]; then
     echo "[ALERTA CRÍTICO DE SEGURANÇA]"
     echo "Arquivos com dados sensíveis (.env, _secrets.py ou certificados) estão rastreados no Git:"
     echo "$FORBIDDEN"
-    echo "O envio foi CANCELADO para proteger sua conta do GitHub contra suspensão."
+    echo "O envio foi cancelado porque há arquivos sensíveis rastreados."
     echo ""
     echo "Execute 'git status' e remova os arquivos do rastreamento antes de tentar novamente."
     echo "======================================================================"
